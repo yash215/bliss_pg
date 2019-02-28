@@ -1,0 +1,116 @@
+---
+#version: '3'
+#services:
+#  web:
+#    build: web/
+#    ports:
+#      - "8000:80"
+#  app:
+#    build: app/
+#    ports:
+#      - "8080:8080"
+#      - "8443:8443"
+#    environment:
+#      DB_HOST: db
+#      DB_NAME: xe
+#      DB_PORT: 1521
+#      DFUSER_PASSWORD: dfuser
+#      FMUSER_PASSWORD: fmuser
+#      SGUSER_PASSWORD: sguser
+#      HKUSER_PASSWORD: hkuser
+#      JPUSER_PASSWORD: jpuser
+#      TZ: "${TZ}"
+#      SSL_CERT: |
+#        -----BEGIN CERTIFICATE-----
+#        MIICCzCCAZCgAwIBAgIQLTfslQQy5m7+FUlkhUIDCTAKBggqhkjOPQQDAzA7MREw
+#        DwYDVQQKEwhUcmF2ZWxleDELMAkGA1UECxMCbWUxGTAXBgNVBAMTEGJsaXNzIGxv
+#        Y2FsIFJPT1QwHhcNMTgwNzAzMTU0NTIyWhcNNDgwNjI1MTU0NTIyWjAuMREwDwYD
+#        VQQKEwhUcmF2ZWxleDELMAkGA1UECxMCbWUxDDAKBgNVBAMTA2FwcDB2MBAGByqG
+#        SM49AgEGBSuBBAAiA2IABCTuqvECh+hcTf+rTt9/wGjt7zXEI4hypIfx4tuDEbmM
+#        mPSLCCxbo++syyYy/zaIKd+Lu+ltN54jMl53UNjyRbEhsKn2wMVW5WHYiOBUMkoW
+#        kopaeIPK3PBusqBqhwvBMKNmMGQwDgYDVR0PAQH/BAQDAgWgMBMGA1UdJQQMMAoG
+#        CCsGAQUFBwMBMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAUR3E8Q8w6/FRIzOaT
+#        WB5eLS2UvicwDgYDVR0RBAcwBYIDYXBwMAoGCCqGSM49BAMDA2kAMGYCMQCuLj1q
+#        J3LGBWE5H+EsW8HnPJEZaw4Krkvb7FWfq3hwZN1PTCemd4iINIZfnJ0c24oCMQD+
+#        FrIJddBDKLeWwQtkkWaAm+nruc1iFT/9jGGg8W+5SeS8vcbQLrWEzhBhuFPuE2o=
+#        -----END CERTIFICATE-----
+#      SSL_CA: |
+#        -----BEGIN CERTIFICATE-----
+#        MIICCTCCAY+gAwIBAgIRAIXYHP91X/IjxNSlLD/v6EwwCgYIKoZIzj0EAwMwOzER
+#        MA8GA1UEChMIVHJhdmVsZXgxCzAJBgNVBAsTAm1lMRkwFwYDVQQDExBibGlzcyBs
+#        b2NhbCBST09UMB4XDTE4MDcwMzE1NDUyMloXDTQ4MDYyNTE1NDUyMlowOzERMA8G
+#        A1UEChMIVHJhdmVsZXgxCzAJBgNVBAsTAm1lMRkwFwYDVQQDExBibGlzcyBsb2Nh
+#        bCBST09UMHYwEAYHKoZIzj0CAQYFK4EEACIDYgAE4oDkCCSVbkcN7OKdstgm8ZJG
+#        PMeDM1bRUJ3uiPEMYyLgbU76nB87CNy4bJfk8aunkRgYF8GoA6rpPsi6kt0oxQRx
+#        Lo1h+GEbnC56tomCXYax/avlS6yaJk4N1+WsXdFbo1cwVTAOBgNVHQ8BAf8EBAMC
+#        AQYwEwYDVR0lBAwwCgYIKwYBBQUHAwkwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4E
+#        FgQUR3E8Q8w6/FRIzOaTWB5eLS2UvicwCgYIKoZIzj0EAwMDaAAwZQIwY/dd8tTV
+#        a5Fm7Ae1VIhGgx9afTJ5bQjWad2khv+gkZYf229ihMQa3Rh20yaJNk7IAjEA2qBy
+#        tY0/Zc7QCKdp936YAByi5jmxkn7H5VOgRNm4GovIVUyI9PlcTjLVyLmNK8KO
+#        -----END CERTIFICATE-----
+#      SSL_KEY: |
+#        -----BEGIN EC PRIVATE KEY-----
+#        MIGkAgEBBDAs/YJxAaZ91ASxe7hPhyZN1bNi7JX8h0J9ARe14X/JpjciivkijohO
+#        nwtX9r3nbP6gBwYFK4EEACKhZANiAAQk7qrxAofoXE3/q07ff8Bo7e81xCOIcqSH
+#        8eLbgxG5jJj0iwgsW6PvrMsmMv82iCnfi7vpbTeeIzJed1DY8kWxIbCp9sDFVuVh
+#        2IjgVDJKFpKKWniDytzwbrKgaocLwTA=
+#        -----END EC PRIVATE KEY-----
+#    depends_on:
+#      - db
+#  #mq:
+#  #  image: ibmcom/mq
+#  #  environment:
+#  #    LICENSE: accept
+#  reutersfeed:
+#    build: reutersfeed/
+#    environment:
+#      REUTERS_USER: ${REUTERS_USER}
+#      REUTERS_PASSWORD: ${REUTERS_PASSWORD}
+#      SECURE_KEY: ${SECURE_KEY}
+#      SECURE_IV : ${SECURE_IV}
+#      REGION_NAMES: ${REGION_NAMES:-HK,SG}
+#      BASE_CURRENCIES: ${BASE_CURRENCIES:-HK.USD,SG.USD}
+#      HK_DB_DRIVER: ${HK_DB_DRIVER:-oracle.jdbc.driver.OracleDriver}
+#      HK_DB_HOST: ${HK_DB_HOST:-db}
+#      HK_DB_PORT: ${HK_DB_PORT:-1521}
+#      HK_DB_NAME: ${HK_DB_NAME:-XE}
+#      HK_DB_USERNAME: ${HK_DB_USERNAME}
+#      HK_DB_PASSWORD: ${HK_DB_PASSWORD}
+#      SG_DB_DRIVER: ${SG_DB_DRIVER:-oracle.jdbc.driver.OracleDriver}
+#      SG_DB_HOST: ${SG_DB_HOST:-db}
+#      SG_DB_PORT: ${SG_DB_PORT:-1521}
+#      SG_DB_NAME: ${SG_DB_NAME:-XE}
+#      SG_DB_USERNAME: ${SG_DB_USERNAME}
+#      SG_DB_PASSWORD: ${SG_DB_PASSWORD}
+#      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+#    links:
+#        - db
+#    container_name: reutersfeed
+#    volumes:
+#      - printdata:/prodlib/BLS/blscache
+#  s3-sync:
+#    build: s3-sync/
+#    environment:
+#      AUDIT_PATH: /prodlib/BLS/blscache
+#      BUCKET_NAME: testing-bls-batch-files
+#      BUCKET_PATH: reports/printing
+#      KMS_KEY_ID: dc621276-9c99-4fdf-8214-d29b41858bbf
+#    volumes:
+#      - printdata:/prodlib/BLS/blscache
+#  db:
+#    image: sath89/oracle-12c
+#    ports:
+#      - "8082:8080"
+#      - "1521:1521"
+#    volumes:
+#      - ./db:/u01/app/oracle
+  flyway:
+    build: flyway_postgres/
+    environment:
+      FLYWAY_URL: "jdbc:postgresql://172.17.0.2:5432/bliss"
+      FLYWAY_COMMAND: "info"
+    #depends_on:
+     # - db
+
+#volumes:
+  #printdata:
