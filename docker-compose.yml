@@ -15,7 +15,7 @@
       FLYWAY_EDITION: "community"
       FLYWAY_BASELINE_ON_MIGRATE: "true"
       FLYWAY_BASELINE_VERSION: "0"
-      FLYWAY_COMMAND: "info"
+      #      FLYWAY_COMMAND: "migrate"
       FLYWAY_ENVIORNMENT: "UAT"
     #  FLYWAY_OUT_OF_ORDER: "true"
     #volumes:

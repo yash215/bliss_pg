@@ -1,0 +1,1 @@
+update sguser.TBLS_VAULTS set repositories_id = 'T_SG_SIN_A_BKN' where is_deleted = 'N' and main_vault_code = 'CONSIGNMENT';
