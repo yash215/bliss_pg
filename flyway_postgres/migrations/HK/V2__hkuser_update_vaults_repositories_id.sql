@@ -1,0 +1,1 @@
+update hkuser.TBLS_VAULTS set repositories_id = 'T_HK_HKG_A_BKN' where is_deleted = 'N' and main_vault_code = 'CONSIGNMENT';

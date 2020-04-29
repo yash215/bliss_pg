@@ -666,7 +666,7 @@ BEGIN
         m_SQLNextVal CHARACTER VARYING(100);
         m_AlterSQL CHARACTER VARYING(100);
     BEGIN
-        m_SQLNextVal := 'select nextval("'||v_SequenceName||'")';
+        m_SQLNextVal := 'select nextval('''||v_SequenceName||''')';
         
         EXECUTE m_SQLNextVal into m_SequenceValue;
         
@@ -2283,7 +2283,7 @@ CREATE TABLE tbls_branches (
     telex_no character varying(50),
     contact_person character varying(50),
     title character varying(50),
-    email character varying(50),
+    email character varying(500),
     swift_code character varying(20),
     reut_code character varying(20),
     branch_group character varying(20),
@@ -5231,7 +5231,7 @@ CREATE TABLE tbls_limits_breach (
     remarks character varying(100),
     breach_date timestamp(6) without time zone DEFAULT clock_timestamp(),
     breach_amount numeric(21,2),
-    nearest_bucket_breached character varying(12),
+    nearest_bucket_breached character varying(60),
     limit_type_id character varying(60),
     allocated_amount numeric(21,2),
     reallocated_amount numeric(21,2),
@@ -5280,7 +5280,7 @@ CREATE TABLE tbls_limits_breach_data (
     split_start_date timestamp(6) without time zone DEFAULT clock_timestamp(),
     split_end_date timestamp(6) without time zone DEFAULT clock_timestamp(),
     breach_amount numeric(21,2),
-    nearest_bucket_breached character varying(12),
+    nearest_bucket_breached character varying(60),
     limit_type_id character varying(60),
     allocated_amount numeric(21,2),
     reallocated_amount numeric(21,2),
@@ -6202,6 +6202,19 @@ CREATE TABLE tbls_mtmsg_configuration (
 
 --
 --
+
+CREATE TABLE tbls_non_std_ccy_mapping (
+    fin_id character varying(20) NOT NULL,
+    non_std_ccy_code character varying(5),
+    reference_system character varying(20),
+    std_ccy_code character varying(5),
+    ccy_desc character varying(50)
+);
+
+
+--
+--
+
 
 CREATE TABLE tbls_order_types (
     fin_id character varying(60) NOT NULL,
@@ -9224,6 +9237,7 @@ CREATE VIEW vbls_deal_search_w_legs_view AS
 --
 
 CREATE VIEW vbls_deals AS
+
  SELECT (((((deals.deal_no)::text || '_'::text) || deals.version_no) || '_'::text) || bn_legs.leg_number) AS fin_id,
     deals.deal_no,
     deals.version_no,
@@ -9237,9 +9251,15 @@ CREATE VIEW vbls_deals AS
     deals.value_date,
     COALESCE(( SELECT tbls_currencypairs.fin_id
            FROM tbls_currencypairs
-          WHERE (((tbls_currencypairs.currency1_id)::text = (bn_legs.currencies_id)::text) AND ((tbls_currencypairs.currency2_id)::text = (bn.setl_cur_id)::text))), ( SELECT tbls_currencypairs.fin_id
+          WHERE (((tbls_currencypairs.currency1_id)::text = (bn_legs.currencies_id)::text)
+                     AND ((tbls_currencypairs.is_deleted)::text = 'N'::text)
+                     AND ((tbls_currencypairs.currency2_id)::text = (bn.setl_cur_id)::text))),
+        ( SELECT tbls_currencypairs.fin_id
            FROM tbls_currencypairs
-          WHERE (((tbls_currencypairs.currency2_id)::text = (bn_legs.currencies_id)::text) AND ((tbls_currencypairs.currency1_id)::text = (bn.setl_cur_id)::text))), ((((bn_legs.currencies_id)::text || '/'::text) || (bn.setl_cur_id)::text))::character varying) AS currencypair,
+          WHERE (((tbls_currencypairs.currency2_id)::text = (bn_legs.currencies_id)::text)
+                     AND ((tbls_currencypairs.is_deleted)::text = 'N'::text)
+                     AND ((tbls_currencypairs.currency1_id)::text = (bn.setl_cur_id)::text))),
+        ((((bn_legs.currencies_id)::text || '/'::text) || (bn.setl_cur_id)::text))::character varying) AS currencypair,
     bn_legs.pl_amount AS leg_margin_amount,
     bn_legs.amount AS leg_amount,
     deals.users_id AS trader,
@@ -9285,6 +9305,8 @@ CREATE VIEW vbls_deals AS
            FROM tbls_dates_master)) AND ((deals.maker_checker_status)::text = 'COMMITTED'::text) AND ((deals.is_deleted)::text = 'N'::text) AND ((versions.maker_checker_status)::text = 'COMMITTED'::text) AND ((versions.is_deleted)::text = 'N'::text) AND ((bn.maker_checker_status)::text = 'COMMITTED'::text) AND ((bn.is_deleted)::text = 'N'::text) AND ((bn_legs.maker_checker_status)::text = 'COMMITTED'::text) AND ((bn_legs.is_deleted)::text = 'N'::text) AND ((rp.maker_checker_status)::text = 'COMMITTED'::text) AND ((rp.is_deleted)::text = 'N'::text) AND ((ct.maker_checker_status)::text = 'COMMITTED'::text) AND ((ct.is_deleted)::text = 'N'::text) AND ((cust.maker_checker_status)::text = 'COMMITTED'::text) AND ((cust.is_deleted)::text = 'N'::text) AND ((deals.products_id)::text IN ( SELECT tbls_products.fin_id
            FROM tbls_products
           WHERE ((tbls_products.code)::text = ANY (ARRAY[('BKN'::character varying)::text, ('TCQ'::character varying)::text])))))
+
+
 UNION ALL
  SELECT (((deals.deal_no)::text || '_'::text) || deals.version_no) AS fin_id,
     deals.deal_no,
@@ -13628,128 +13650,291 @@ UNION
 --
 --
 
-CREATE VIEW vbls_msg_search_view AS
- SELECT (((((banknotesdeals.fin_id)::text || COALESCE(settlements.version_no, ((0)::bigint)::double precision)) || (COALESCE(messageshistory.module_name, ' '::character varying))::text) || (COALESCE(messageshistory.msg_source, ' '::character varying))::text) || COALESCE(messageshistory.page_no, ((1)::bigint)::double precision)) AS fin_id,
-    COALESCE(banknotesdeals.fully_funded, ' '::bpchar) AS fully_funded,
-    banknotesdeals.vault_date,
-    banknotesdeals.release_date,
-    banknotesdeals.net_setl_amt,
-    banknotesdeals.setl_cur_id AS setl_currency,
-    dealversions.fin_id AS deals_versions_fin_id,
-    dealversions.version_no AS deals_version_no,
-    dealversions.link_deal_no,
-    dealversions.action,
-    dealversions.action_date,
-    COALESCE(dealversions.external_comments, ' '::character varying) AS external_comments,
-    COALESCE(dealversions.internal_comments, ' '::character varying) AS internal_comments,
-    products.name AS products_name,
-    products.deal_type_name AS dealtype_name,
-    products.code AS products_code,
-    uddealtypes.name AS ud_type_name,
-    deals.deal_no AS deal_number,
-    deals.buy_sell,
-    deals.repositories_id,
-    deals.entry_date,
-    deals.trade_date,
-    deals.value_date,
-    deals.products_id,
-    deals.customers_id AS customer_id,
-    deals.branches_id,
-    deals.ud_deal_types_id,
-    deals.status,
-    deals.users_id AS user_id,
-    customers.name AS customers_name,
-    customers.short_name AS customers_short_name,
-    customers.ctp_no AS customers_ctp_no,
-    branches.name AS branches_name,
-    branches.short_name AS branches_short_name,
-    sdis.sdi_code,
-    COALESCE(dealssi.nv_code, ' '::character varying) AS nv_code,
-    COALESCE(dealssi.ssi_type, ' '::character varying) AS ssi_type,
-    COALESCE(dealssi.pay_receive, ' '::bpchar) AS pay_receive,
-    COALESCE(dealssi.bic_code, ' '::character varying) AS bic_code,
-    COALESCE(dealssi.gl_code, ' '::character varying) AS gl_code,
-    COALESCE(dealssi.account_no, ' '::character varying) AS account_no,
-    COALESCE(dealssi.ssi_code, ' '::character varying) AS ssi_code,
-    COALESCE(dealssi.ssi_rules_id, ' '::character varying) AS ssi_rules_id,
-    COALESCE(dealssi.cust_agent_name1, ' '::character varying) AS agent_name1,
-    COALESCE(dealssi.cust_agent_name2, ' '::character varying) AS agent_name2,
-    COALESCE(dealssi.cust_agent_name3, ' '::character varying) AS agent_name3,
-    COALESCE(dealssi.cust_agent_name4, ' '::character varying) AS agent_name4,
-    COALESCE(dealssi.cust_agent_swift_code, ' '::character varying) AS agent_swift_code,
-    COALESCE(dealssi.cust_agent_account, ' '::character varying) AS agent_account,
-    COALESCE(dealssi.beneficiary_acc_no, ' '::character varying) AS bene_account,
-    COALESCE(dealssi.bene_name1, ' '::character varying) AS int_name1,
-    COALESCE(dealssi.bene_name2, ' '::character varying) AS int_name2,
-    COALESCE(dealssi.bene_name3, ' '::character varying) AS int_name3,
-    COALESCE(dealssi.bene_name4, ' '::character varying) AS int_name4,
-    COALESCE(dealssi.int_swift_code, ' '::character varying) AS int_swift_code,
-    COALESCE(dealssi.int_account, ' '::character varying) AS int_account,
-    COALESCE(dealssi.additional_info1, ' '::character varying) AS additional_info1,
-    COALESCE(dealssi.additional_info2, ' '::character varying) AS additional_info2,
-    COALESCE(dealssi.additional_info3, ' '::character varying) AS additional_info3,
-    COALESCE(dealssi.bene_swift_code, ' '::character varying) AS additional_info4,
-    COALESCE(dealssi.msg_template_id, ' '::character varying) AS message_template_id,
-    COALESCE(dealssi.setl_mode_id, ' '::character varying) AS setl_mode_id,
-    COALESCE(dealssi.fin_id, ' '::character varying) AS ssi_fin_id,
-    COALESCE(settlements.fin_id, ' '::character varying) AS settlement_fin_id,
-    COALESCE(settlements.setl_no, '0'::character varying) AS setl_no,
-    COALESCE(settlements.version_no, ((0)::bigint)::double precision) AS setl_version_no,
-    COALESCE(settlements.setl_amount, (0)::numeric) AS setl_amt,
-    COALESCE(settlements.setl_origin, ' '::character varying) AS setl_origin,
-    COALESCE(to_char(settlements.setl_date, 'DD/MM/YYYY'::text), ' '::text) AS setl_date,
-    COALESCE(to_char(settlements.setl_release_date, 'DD/MM/YYYY'::text), ' '::text) AS setl_release_date,
-        CASE
-            WHEN (((COALESCE(settlements.is_deleted, 'N'::character varying))::text = 'Y'::text) AND ((COALESCE(workflowstatessetl.name, ' '::character varying))::text = 'NETTEDC'::text)) THEN 'N'::character varying
-            ELSE COALESCE(settlements.is_deleted, 'N'::character varying)
-        END AS setl_deleted,
-    workflowstatesdeals.name AS deal_status,
-    COALESCE(dealstatus.operations_userid, ' '::character varying) AS deal_status_validator,
-    workflowstatesdeals.workflow_level AS deal_status_level,
-    workflowstatesshipment.name AS shipment_status,
-    workflowstatesvault.name AS vault_status,
-    COALESCE(workflowstatessetl.name, ' '::character varying) AS setl_status,
-    COALESCE(workflowstatessetl.workflow_level, (('-1'::integer)::bigint)::double precision) AS setl_status_level,
-    COALESCE(dealstatus.fo_remarks, ' '::character varying) AS fo_remarks,
-    COALESCE(dealstatus.bo_remarks, ' '::character varying) AS setl_remarks,
-    COALESCE(messageshistory.module_entity_id, ' '::character varying) AS module_entity_id,
-    COALESCE(messageshistory.module_name, ' '::character varying) AS module_name,
-    COALESCE(messageshistory.msg_source, ' '::character varying) AS msg_source,
-    COALESCE(messageshistory.isn_no, ' '::character varying) AS isn_no,
-    COALESCE(messageshistory.session_no, ' '::character varying) AS session_no,
-    COALESCE(workflowmsgstatus.name, ' '::character varying) AS msg_status,
-    COALESCE(msgtemplates.msg_name, ' '::character varying) AS msg_name,
-    COALESCE(msgtemplates.msg_code, ' '::character varying) AS msg_code,
-    COALESCE(msgtemplates.swift_type, ' '::character varying) AS swift_type,
-    COALESCE(to_char(messageshistory.generated_date, 'DD/MM/YYYY'::text), ' '::text) AS generated_date,
-    COALESCE(messageshistory.reason_flag, ' '::character varying) AS reason_flag,
-    COALESCE(messageshistory.reason_code, ' '::character varying) AS reason_code,
-    COALESCE(messageshistory.reason_text, ' '::character varying) AS reason_text,
-    COALESCE(messageshistory.ack_flag, ' '::character varying) AS ack_flag,
-    COALESCE(messageshistory.ack_text, ' '::character varying) AS ack_text,
-    COALESCE(messageshistory.page_no, ((1)::bigint)::double precision) AS page_no
-   FROM (tbls_bank_notes_deals banknotesdeals
-     LEFT JOIN tbls_sdis sdis ON (((banknotesdeals.sdi_id)::text = (sdis.fin_id)::text))),
-    (((tbls_deal_versions dealversions
-     LEFT JOIN tbls_deal_ssi dealssi ON (((dealversions.fin_id)::text = (dealssi.deal_versions_id)::text)))
-     LEFT JOIN tbls_settlements settlements ON ((((dealversions.fin_id)::text = (settlements.deal_versions_id)::text) AND ((settlements.is_deleted)::text = 'N'::text))))
-     LEFT JOIN tbls_workflow_states workflowstatessetl ON (((workflowstatessetl.fin_id)::text = (settlements.status_id)::text))),
-    tbls_deals deals,
-    tbls_products products,
-    tbls_ud_deal_types uddealtypes,
-    tbls_ud_dt_mapping uddtmapping,
-    tbls_customers customers,
-    tbls_branches branches,
-    tbls_messages_history messageshistory,
-    tbls_msg_templates msgtemplates,
-    tbls_deals_status dealstatus,
-    tbls_workflow_states workflowstatesdeals,
-    tbls_workflow_states workflowstatesshipment,
-    tbls_workflow_states workflowstatesvault,
-    tbls_workflow_states workflowmsgstatus,
-    tbls_dates_master datesmaster
-  WHERE (((banknotesdeals.fin_id)::text = (dealversions.fin_id)::text) AND ((dealversions.deals_id)::text = (deals.fin_id)::text) AND ((dealversions.customers_id)::text = (customers.fin_id)::text) AND ((dealversions.branches_id)::text = (branches.fin_id)::text) AND ((dealversions.products_id)::text = (products.fin_id)::text) AND ((dealstatus.fin_id)::text = (deals.deal_no)::text) AND ((dealstatus.deal_status_id)::text = (workflowstatesdeals.fin_id)::text) AND ((uddealtypes.code)::text = (uddtmapping.ud_deal_types_id)::text) AND ((uddtmapping.fin_id)::text = (deals.ud_deal_types_id)::text) AND ((workflowstatesshipment.fin_id)::text = (dealstatus.shipping_status_id)::text) AND ((workflowstatesvault.fin_id)::text = (dealstatus.vault_status_id)::text) AND ((((messageshistory.module_entity_id)::text = (dealversions.deals_id)::text) AND ((messageshistory.module_name)::text = 'DEALS'::text) AND (messageshistory.version_no = dealversions.version_no) AND ((messageshistory.msg_status_id)::text = (workflowmsgstatus.fin_id)::text) AND ((msgtemplates.fin_id)::text = (messageshistory.msg_templates_id)::text)) OR (((messageshistory.module_entity_id)::text = (settlements.fin_id)::text) AND ((messageshistory.module_name)::text = 'SETTLEMENTS'::text) AND ((settlements.deal_versions_id)::text = (dealversions.fin_id)::text) AND ((messageshistory.msg_status_id)::text = (workflowmsgstatus.fin_id)::text) AND ((msgtemplates.fin_id)::text = (messageshistory.msg_templates_id)::text) AND (settlements.setl_date >= (datesmaster.system_date - '15 days'::interval)))) AND (to_char(deals.trade_date, 'YYYYMMDD'::text) >= to_char((datesmaster.system_date - '15 days'::interval), 'YYYYMMDD'::text)) AND (dealversions.trade_date >= (datesmaster.system_date - '15 days'::interval)));
-
+CREATE OR REPLACE VIEW vbls_msg_search_view AS
+SELECT (((banknotesdeals.fin_id::TEXT || COALESCE(settlements.version_no, 0::BIGINT::DOUBLE PRECISION)) || COALESCE(messageshistory.module_name, ' '::CHARACTER VARYING)::TEXT) || COALESCE(messageshistory.msg_source, ' '::CHARACTER VARYING)::TEXT) || COALESCE(messageshistory.page_no, 1::BIGINT::DOUBLE PRECISION) AS fin_id
+	,COALESCE(banknotesdeals.fully_funded, ' '::bpchar) AS fully_funded
+	,banknotesdeals.vault_date
+	,banknotesdeals.release_date
+	,banknotesdeals.net_setl_amt
+	,banknotesdeals.setl_cur_id AS setl_currency
+	,dealversions.fin_id AS deals_versions_fin_id
+	,dealversions.version_no AS deals_version_no
+	,dealversions.link_deal_no
+	,dealversions.action
+	,dealversions.action_date
+	,COALESCE(dealversions.external_comments, ' '::CHARACTER VARYING) AS external_comments
+	,COALESCE(dealversions.internal_comments, ' '::CHARACTER VARYING) AS internal_comments
+	,products.name AS products_name
+	,products.deal_type_name AS dealtype_name
+	,products.code AS products_code
+	,uddealtypes.name AS ud_type_name
+	,deals.deal_no AS deal_number
+	,deals.buy_sell
+	,deals.repositories_id
+	,deals.entry_date
+	,deals.trade_date
+	,deals.value_date
+	,deals.products_id
+	,deals.customers_id AS customer_id
+	,deals.branches_id
+	,deals.ud_deal_types_id
+	,deals.STATUS
+	,deals.users_id AS user_id
+	,customers.name AS customers_name
+	,customers.short_name AS customers_short_name
+	,customers.ctp_no AS customers_ctp_no
+	,branches.name AS branches_name
+	,branches.short_name AS branches_short_name
+	,sdis.sdi_code
+	,COALESCE(dealssi.nv_code, ' '::CHARACTER VARYING) AS nv_code
+	,COALESCE(dealssi.ssi_type, ' '::CHARACTER VARYING) AS ssi_type
+	,COALESCE(dealssi.pay_receive, ' '::bpchar) AS pay_receive
+	,COALESCE(dealssi.bic_code, ' '::CHARACTER VARYING) AS bic_code
+	,COALESCE(dealssi.gl_code, ' '::CHARACTER VARYING) AS gl_code
+	,COALESCE(dealssi.account_no, ' '::CHARACTER VARYING) AS account_no
+	,COALESCE(dealssi.ssi_code, ' '::CHARACTER VARYING) AS ssi_code
+	,COALESCE(dealssi.ssi_rules_id, ' '::CHARACTER VARYING) AS ssi_rules_id
+	,COALESCE(dealssi.cust_agent_name1, ' '::CHARACTER VARYING) AS agent_name1
+	,COALESCE(dealssi.cust_agent_name2, ' '::CHARACTER VARYING) AS agent_name2
+	,COALESCE(dealssi.cust_agent_name3, ' '::CHARACTER VARYING) AS agent_name3
+	,COALESCE(dealssi.cust_agent_name4, ' '::CHARACTER VARYING) AS agent_name4
+	,COALESCE(dealssi.cust_agent_swift_code, ' '::CHARACTER VARYING) AS agent_swift_code
+	,COALESCE(dealssi.cust_agent_account, ' '::CHARACTER VARYING) AS agent_account
+	,COALESCE(dealssi.beneficiary_acc_no, ' '::CHARACTER VARYING) AS bene_account
+	,COALESCE(dealssi.bene_name1, ' '::CHARACTER VARYING) AS int_name1
+	,COALESCE(dealssi.bene_name2, ' '::CHARACTER VARYING) AS int_name2
+	,COALESCE(dealssi.bene_name3, ' '::CHARACTER VARYING) AS int_name3
+	,COALESCE(dealssi.bene_name4, ' '::CHARACTER VARYING) AS int_name4
+	,COALESCE(dealssi.int_swift_code, ' '::CHARACTER VARYING) AS int_swift_code
+	,COALESCE(dealssi.int_account, ' '::CHARACTER VARYING) AS int_account
+	,COALESCE(dealssi.additional_info1, ' '::CHARACTER VARYING) AS additional_info1
+	,COALESCE(dealssi.additional_info2, ' '::CHARACTER VARYING) AS additional_info2
+	,COALESCE(dealssi.additional_info3, ' '::CHARACTER VARYING) AS additional_info3
+	,COALESCE(dealssi.bene_swift_code, ' '::CHARACTER VARYING) AS additional_info4
+	,COALESCE(dealssi.msg_template_id, ' '::CHARACTER VARYING) AS message_template_id
+	,COALESCE(dealssi.setl_mode_id, ' '::CHARACTER VARYING) AS setl_mode_id
+	,COALESCE(dealssi.fin_id, ' '::CHARACTER VARYING) AS ssi_fin_id
+	,COALESCE(settlements.fin_id, ' '::CHARACTER VARYING) AS settlement_fin_id
+	,COALESCE(settlements.setl_no, '0'::CHARACTER VARYING) AS setl_no
+	,COALESCE(settlements.version_no, 0::BIGINT::DOUBLE PRECISION) AS setl_version_no
+	,COALESCE(settlements.setl_amount, 0::NUMERIC) AS setl_amt
+	,COALESCE(settlements.setl_origin, ' '::CHARACTER VARYING) AS setl_origin
+	,COALESCE(to_char(settlements.setl_date, 'DD/MM/YYYY'::TEXT), ' '::TEXT) AS setl_date
+	,COALESCE(to_char(settlements.setl_release_date, 'DD/MM/YYYY'::TEXT), ' '::TEXT) AS setl_release_date
+	,CASE 
+		WHEN COALESCE(settlements.is_deleted, 'N'::CHARACTER VARYING)::TEXT = 'Y'::TEXT
+			AND COALESCE(workflowstatessetl.name, ' '::CHARACTER VARYING)::TEXT = 'NETTEDC'::TEXT
+			THEN 'N'::CHARACTER VARYING
+		ELSE COALESCE(settlements.is_deleted, 'N'::CHARACTER VARYING)
+		END AS setl_deleted
+	,workflowstatesdeals.name AS deal_status
+	,COALESCE(dealstatus.operations_userid, ' '::CHARACTER VARYING) AS deal_status_validator
+	,workflowstatesdeals.workflow_level AS deal_status_level
+	,workflowstatesshipment.name AS shipment_status
+	,workflowstatesvault.name AS vault_status
+	,COALESCE(workflowstatessetl.name, ' '::CHARACTER VARYING) AS setl_status
+	,COALESCE(workflowstatessetl.workflow_level, '-1'::INTEGER::BIGINT::DOUBLE PRECISION) AS setl_status_level
+	,COALESCE(dealstatus.fo_remarks, ' '::CHARACTER VARYING) AS fo_remarks
+	,COALESCE(dealstatus.bo_remarks, ' '::CHARACTER VARYING) AS setl_remarks
+	,COALESCE(messageshistory.module_entity_id, ' '::CHARACTER VARYING) AS module_entity_id
+	,COALESCE(messageshistory.module_name, ' '::CHARACTER VARYING) AS module_name
+	,COALESCE(messageshistory.msg_source, ' '::CHARACTER VARYING) AS msg_source
+	,COALESCE(messageshistory.isn_no, ' '::CHARACTER VARYING) AS isn_no
+	,COALESCE(messageshistory.session_no, ' '::CHARACTER VARYING) AS session_no
+	,COALESCE(workflowmsgstatus.name, ' '::CHARACTER VARYING) AS msg_status
+	,COALESCE(msgtemplates.msg_name, ' '::CHARACTER VARYING) AS msg_name
+	,COALESCE(msgtemplates.msg_code, ' '::CHARACTER VARYING) AS msg_code
+	,COALESCE(msgtemplates.swift_type, ' '::CHARACTER VARYING) AS swift_type
+	,COALESCE(to_char(messageshistory.generated_date, 'DD/MM/YYYY'::TEXT), ' '::TEXT) AS generated_date
+	,COALESCE(messageshistory.reason_flag, ' '::CHARACTER VARYING) AS reason_flag
+	,COALESCE(messageshistory.reason_code, ' '::CHARACTER VARYING) AS reason_code
+	,COALESCE(messageshistory.reason_text, ' '::CHARACTER VARYING) AS reason_text
+	,COALESCE(messageshistory.ack_flag, ' '::CHARACTER VARYING) AS ack_flag
+	,COALESCE(messageshistory.ack_text, ' '::CHARACTER VARYING) AS ack_text
+	,COALESCE(messageshistory.page_no, 1::BIGINT::DOUBLE PRECISION) AS page_no
+FROM tbls_bank_notes_deals banknotesdeals
+LEFT JOIN tbls_sdis sdis ON banknotesdeals.sdi_id::TEXT = sdis.fin_id::TEXT
+	,tbls_deal_versions dealversions
+LEFT JOIN tbls_deal_ssi dealssi ON dealversions.fin_id::TEXT = dealssi.deal_versions_id::TEXT
+LEFT JOIN tbls_settlements settlements ON dealversions.fin_id::TEXT = settlements.deal_versions_id::TEXT
+	AND settlements.is_deleted::TEXT = 'N'::TEXT
+LEFT JOIN tbls_workflow_states workflowstatessetl ON workflowstatessetl.fin_id::TEXT = settlements.status_id::TEXT
+	,tbls_deals deals
+	,tbls_products products
+	,tbls_ud_deal_types uddealtypes
+	,tbls_ud_dt_mapping uddtmapping
+	,tbls_customers customers
+	,tbls_branches branches
+	,tbls_messages_history messageshistory
+	,tbls_msg_templates msgtemplates
+	,tbls_deals_status dealstatus
+	,tbls_workflow_states workflowstatesdeals
+	,tbls_workflow_states workflowstatesshipment
+	,tbls_workflow_states workflowstatesvault
+	,tbls_workflow_states workflowmsgstatus
+	,tbls_dates_master datesmaster
+WHERE banknotesdeals.fin_id::TEXT = dealversions.fin_id::TEXT
+	AND dealversions.deals_id::TEXT = deals.fin_id::TEXT
+	AND dealversions.customers_id::TEXT = customers.fin_id::TEXT
+	AND dealversions.branches_id::TEXT = branches.fin_id::TEXT
+	AND dealversions.products_id::TEXT = products.fin_id::TEXT
+	AND dealstatus.fin_id::TEXT = deals.deal_no::TEXT
+	AND dealstatus.deal_status_id::TEXT = workflowstatesdeals.fin_id::TEXT
+	AND uddealtypes.code::TEXT = uddtmapping.ud_deal_types_id::TEXT
+	AND uddtmapping.fin_id::TEXT = deals.ud_deal_types_id::TEXT
+	AND workflowstatesshipment.fin_id::TEXT = dealstatus.shipping_status_id::TEXT
+	AND workflowstatesvault.fin_id::TEXT = dealstatus.vault_status_id::TEXT
+	AND messageshistory.module_entity_id::TEXT = dealversions.deals_id::TEXT
+	AND messageshistory.module_name::TEXT = 'DEALS'::TEXT
+	AND messageshistory.version_no = dealversions.version_no
+	AND messageshistory.msg_status_id::TEXT = workflowmsgstatus.fin_id::TEXT
+	AND msgtemplates.fin_id::TEXT = messageshistory.msg_templates_id::TEXT
+	AND to_char(deals.trade_date, 'YYYYMMDD'::TEXT) >= to_char(datesmaster.system_date - '15 days'::interval, 'YYYYMMDD'::TEXT)
+	AND dealversions.trade_date >= (datesmaster.system_date - '15 days'::interval)
+	
+	
+	union 
+	SELECT (((banknotesdeals.fin_id::TEXT || COALESCE(settlements.version_no, 0::BIGINT::DOUBLE PRECISION)) || COALESCE(messageshistory.module_name, ' '::CHARACTER VARYING)::TEXT) || COALESCE(messageshistory.msg_source, ' '::CHARACTER VARYING)::TEXT) || COALESCE(messageshistory.page_no, 1::BIGINT::DOUBLE PRECISION) AS fin_id
+	,COALESCE(banknotesdeals.fully_funded, ' '::bpchar) AS fully_funded
+	,banknotesdeals.vault_date
+	,banknotesdeals.release_date
+	,banknotesdeals.net_setl_amt
+	,banknotesdeals.setl_cur_id AS setl_currency
+	,dealversions.fin_id AS deals_versions_fin_id
+	,dealversions.version_no AS deals_version_no
+	,dealversions.link_deal_no
+	,dealversions.action
+	,dealversions.action_date
+	,COALESCE(dealversions.external_comments, ' '::CHARACTER VARYING) AS external_comments
+	,COALESCE(dealversions.internal_comments, ' '::CHARACTER VARYING) AS internal_comments
+	,products.name AS products_name
+	,products.deal_type_name AS dealtype_name
+	,products.code AS products_code
+	,uddealtypes.name AS ud_type_name
+	,deals.deal_no AS deal_number
+	,deals.buy_sell
+	,deals.repositories_id
+	,deals.entry_date
+	,deals.trade_date
+	,deals.value_date
+	,deals.products_id
+	,deals.customers_id AS customer_id
+	,deals.branches_id
+	,deals.ud_deal_types_id
+	,deals.STATUS
+	,deals.users_id AS user_id
+	,customers.name AS customers_name
+	,customers.short_name AS customers_short_name
+	,customers.ctp_no AS customers_ctp_no
+	,branches.name AS branches_name
+	,branches.short_name AS branches_short_name
+	,sdis.sdi_code
+	,COALESCE(dealssi.nv_code, ' '::CHARACTER VARYING) AS nv_code
+	,COALESCE(dealssi.ssi_type, ' '::CHARACTER VARYING) AS ssi_type
+	,COALESCE(dealssi.pay_receive, ' '::bpchar) AS pay_receive
+	,COALESCE(dealssi.bic_code, ' '::CHARACTER VARYING) AS bic_code
+	,COALESCE(dealssi.gl_code, ' '::CHARACTER VARYING) AS gl_code
+	,COALESCE(dealssi.account_no, ' '::CHARACTER VARYING) AS account_no
+	,COALESCE(dealssi.ssi_code, ' '::CHARACTER VARYING) AS ssi_code
+	,COALESCE(dealssi.ssi_rules_id, ' '::CHARACTER VARYING) AS ssi_rules_id
+	,COALESCE(dealssi.cust_agent_name1, ' '::CHARACTER VARYING) AS agent_name1
+	,COALESCE(dealssi.cust_agent_name2, ' '::CHARACTER VARYING) AS agent_name2
+	,COALESCE(dealssi.cust_agent_name3, ' '::CHARACTER VARYING) AS agent_name3
+	,COALESCE(dealssi.cust_agent_name4, ' '::CHARACTER VARYING) AS agent_name4
+	,COALESCE(dealssi.cust_agent_swift_code, ' '::CHARACTER VARYING) AS agent_swift_code
+	,COALESCE(dealssi.cust_agent_account, ' '::CHARACTER VARYING) AS agent_account
+	,COALESCE(dealssi.beneficiary_acc_no, ' '::CHARACTER VARYING) AS bene_account
+	,COALESCE(dealssi.bene_name1, ' '::CHARACTER VARYING) AS int_name1
+	,COALESCE(dealssi.bene_name2, ' '::CHARACTER VARYING) AS int_name2
+	,COALESCE(dealssi.bene_name3, ' '::CHARACTER VARYING) AS int_name3
+	,COALESCE(dealssi.bene_name4, ' '::CHARACTER VARYING) AS int_name4
+	,COALESCE(dealssi.int_swift_code, ' '::CHARACTER VARYING) AS int_swift_code
+	,COALESCE(dealssi.int_account, ' '::CHARACTER VARYING) AS int_account
+	,COALESCE(dealssi.additional_info1, ' '::CHARACTER VARYING) AS additional_info1
+	,COALESCE(dealssi.additional_info2, ' '::CHARACTER VARYING) AS additional_info2
+	,COALESCE(dealssi.additional_info3, ' '::CHARACTER VARYING) AS additional_info3
+	,COALESCE(dealssi.bene_swift_code, ' '::CHARACTER VARYING) AS additional_info4
+	,COALESCE(dealssi.msg_template_id, ' '::CHARACTER VARYING) AS message_template_id
+	,COALESCE(dealssi.setl_mode_id, ' '::CHARACTER VARYING) AS setl_mode_id
+	,COALESCE(dealssi.fin_id, ' '::CHARACTER VARYING) AS ssi_fin_id
+	,COALESCE(settlements.fin_id, ' '::CHARACTER VARYING) AS settlement_fin_id
+	,COALESCE(settlements.setl_no, '0'::CHARACTER VARYING) AS setl_no
+	,COALESCE(settlements.version_no, 0::BIGINT::DOUBLE PRECISION) AS setl_version_no
+	,COALESCE(settlements.setl_amount, 0::NUMERIC) AS setl_amt
+	,COALESCE(settlements.setl_origin, ' '::CHARACTER VARYING) AS setl_origin
+	,COALESCE(to_char(settlements.setl_date, 'DD/MM/YYYY'::TEXT), ' '::TEXT) AS setl_date
+	,COALESCE(to_char(settlements.setl_release_date, 'DD/MM/YYYY'::TEXT), ' '::TEXT) AS setl_release_date
+	,CASE 
+		WHEN COALESCE(settlements.is_deleted, 'N'::CHARACTER VARYING)::TEXT = 'Y'::TEXT
+			AND COALESCE(workflowstatessetl.name, ' '::CHARACTER VARYING)::TEXT = 'NETTEDC'::TEXT
+			THEN 'N'::CHARACTER VARYING
+		ELSE COALESCE(settlements.is_deleted, 'N'::CHARACTER VARYING)
+		END AS setl_deleted
+	,workflowstatesdeals.name AS deal_status
+	,COALESCE(dealstatus.operations_userid, ' '::CHARACTER VARYING) AS deal_status_validator
+	,workflowstatesdeals.workflow_level AS deal_status_level
+	,workflowstatesshipment.name AS shipment_status
+	,workflowstatesvault.name AS vault_status
+	,COALESCE(workflowstatessetl.name, ' '::CHARACTER VARYING) AS setl_status
+	,COALESCE(workflowstatessetl.workflow_level, '-1'::INTEGER::BIGINT::DOUBLE PRECISION) AS setl_status_level
+	,COALESCE(dealstatus.fo_remarks, ' '::CHARACTER VARYING) AS fo_remarks
+	,COALESCE(dealstatus.bo_remarks, ' '::CHARACTER VARYING) AS setl_remarks
+	,COALESCE(messageshistory.module_entity_id, ' '::CHARACTER VARYING) AS module_entity_id
+	,COALESCE(messageshistory.module_name, ' '::CHARACTER VARYING) AS module_name
+	,COALESCE(messageshistory.msg_source, ' '::CHARACTER VARYING) AS msg_source
+	,COALESCE(messageshistory.isn_no, ' '::CHARACTER VARYING) AS isn_no
+	,COALESCE(messageshistory.session_no, ' '::CHARACTER VARYING) AS session_no
+	,COALESCE(workflowmsgstatus.name, ' '::CHARACTER VARYING) AS msg_status
+	,COALESCE(msgtemplates.msg_name, ' '::CHARACTER VARYING) AS msg_name
+	,COALESCE(msgtemplates.msg_code, ' '::CHARACTER VARYING) AS msg_code
+	,COALESCE(msgtemplates.swift_type, ' '::CHARACTER VARYING) AS swift_type
+	,COALESCE(to_char(messageshistory.generated_date, 'DD/MM/YYYY'::TEXT), ' '::TEXT) AS generated_date
+	,COALESCE(messageshistory.reason_flag, ' '::CHARACTER VARYING) AS reason_flag
+	,COALESCE(messageshistory.reason_code, ' '::CHARACTER VARYING) AS reason_code
+	,COALESCE(messageshistory.reason_text, ' '::CHARACTER VARYING) AS reason_text
+	,COALESCE(messageshistory.ack_flag, ' '::CHARACTER VARYING) AS ack_flag
+	,COALESCE(messageshistory.ack_text, ' '::CHARACTER VARYING) AS ack_text
+	,COALESCE(messageshistory.page_no, 1::BIGINT::DOUBLE PRECISION) AS page_no
+FROM tbls_bank_notes_deals banknotesdeals
+LEFT JOIN tbls_sdis sdis ON banknotesdeals.sdi_id::TEXT = sdis.fin_id::TEXT
+	,tbls_deal_versions dealversions
+LEFT JOIN tbls_deal_ssi dealssi ON dealversions.fin_id::TEXT = dealssi.deal_versions_id::TEXT
+LEFT JOIN tbls_settlements settlements ON dealversions.fin_id::TEXT = settlements.deal_versions_id::TEXT
+	AND settlements.is_deleted::TEXT = 'N'::TEXT
+LEFT JOIN tbls_workflow_states workflowstatessetl ON workflowstatessetl.fin_id::TEXT = settlements.status_id::TEXT
+	,tbls_deals deals
+	,tbls_products products
+	,tbls_ud_deal_types uddealtypes
+	,tbls_ud_dt_mapping uddtmapping
+	,tbls_customers customers
+	,tbls_branches branches
+	,tbls_messages_history messageshistory
+	,tbls_msg_templates msgtemplates
+	,tbls_deals_status dealstatus
+	,tbls_workflow_states workflowstatesdeals
+	,tbls_workflow_states workflowstatesshipment
+	,tbls_workflow_states workflowstatesvault
+	,tbls_workflow_states workflowmsgstatus
+	,tbls_dates_master datesmaster
+WHERE banknotesdeals.fin_id::TEXT = dealversions.fin_id::TEXT
+	AND dealversions.deals_id::TEXT = deals.fin_id::TEXT
+	AND dealversions.customers_id::TEXT = customers.fin_id::TEXT
+	AND dealversions.branches_id::TEXT = branches.fin_id::TEXT
+	AND dealversions.products_id::TEXT = products.fin_id::TEXT
+	AND dealstatus.fin_id::TEXT = deals.deal_no::TEXT
+	AND dealstatus.deal_status_id::TEXT = workflowstatesdeals.fin_id::TEXT
+	AND uddealtypes.code::TEXT = uddtmapping.ud_deal_types_id::TEXT
+	AND uddtmapping.fin_id::TEXT = deals.ud_deal_types_id::TEXT
+	AND workflowstatesshipment.fin_id::TEXT = dealstatus.shipping_status_id::TEXT
+	AND workflowstatesvault.fin_id::TEXT = dealstatus.vault_status_id::TEXT
+	    AND messageshistory.module_entity_id::TEXT = settlements.fin_id::TEXT
+		AND messageshistory.module_name::TEXT = 'SETTLEMENTS'::TEXT
+		AND settlements.deal_versions_id::TEXT = dealversions.fin_id::TEXT
+		AND messageshistory.msg_status_id::TEXT = workflowmsgstatus.fin_id::TEXT
+		AND msgtemplates.fin_id::TEXT = messageshistory.msg_templates_id::TEXT
+		AND settlements.setl_date >= (datesmaster.system_date - '15 days'::interval)
+		AND to_char(deals.trade_date, 'YYYYMMDD'::TEXT) >= to_char(datesmaster.system_date - '15 days'::interval, 'YYYYMMDD'::TEXT)
+	AND dealversions.trade_date >= (datesmaster.system_date - '15 days'::interval);
 
 --
 --
@@ -14737,14 +14922,14 @@ CREATE VIEW vbls_view_credit_limits_alloc AS
 --
 
 ALTER TABLE ONLY tbls_maker_checker_data
-    ADD CONSTRAINT "TBLS_MAKER_CHECKER_DATA_pkey" PRIMARY KEY (fin_id);
+    ADD CONSTRAINT pk_bls_maker_checker_data PRIMARY KEY (fin_id);
 
 
 --
 --
 
 ALTER TABLE ONLY tbls_msg_history_content
-    ADD CONSTRAINT "TBLS_MSG_HISTORY_CONTENT_pkey" PRIMARY KEY (fin_id);
+    ADD CONSTRAINT pk_bls_msg_history_content PRIMARY KEY (fin_id);
 
 
 --
@@ -15534,6 +15719,13 @@ ALTER TABLE ONLY tbls_irr_config_pay_rec
 --
 --
 
+ALTER TABLE ONLY tbls_it2_recon_input
+    ADD CONSTRAINT pk_bls_it2_recon_input PRIMARY KEY (fin_id);
+
+
+--
+--
+
 ALTER TABLE ONLY tbls_like_like_base_pl_acc
     ADD CONSTRAINT pk_bls_like_like_base_pl_acc PRIMARY KEY (fin_id);
 
@@ -15743,6 +15935,14 @@ ALTER TABLE ONLY tbls_mtmsg_configuration
 
 --
 --
+
+
+ALTER TABLE ONLY tbls_non_std_ccy_mapping
+    ADD CONSTRAINT pk_bls_non_std_ccy_mapping PRIMARY KEY (fin_id);
+
+--
+--
+
 
 ALTER TABLE ONLY tbls_order_types
     ADD CONSTRAINT pk_bls_order_types PRIMARY KEY (fin_id);
@@ -16284,28 +16484,28 @@ ALTER TABLE ONLY tbls_aml_breach_alerts
 --
 
 ALTER TABLE ONLY tbls_discrepancy_records
-    ADD CONSTRAINT tbls_discrepancy_records_pkey PRIMARY KEY (fin_id);
+    ADD CONSTRAINT pk_bls_discrepancy_records PRIMARY KEY (fin_id);
 
 
 --
 --
 
 ALTER TABLE ONLY tbls_eod_progress
-    ADD CONSTRAINT tbls_eod_progress_pkey PRIMARY KEY (fin_id);
+    ADD CONSTRAINT pk_bls_eod_progress PRIMARY KEY (fin_id);
 
 
 --
 --
 
 ALTER TABLE ONLY tbls_messages_history_his
-    ADD CONSTRAINT tbls_messages_history_his_pkey PRIMARY KEY (fin_id);
+    ADD CONSTRAINT pk_bls_messages_history_his PRIMARY KEY (fin_id);
 
 
 --
 --
 
 ALTER TABLE ONLY tbls_msg_history_content_his
-    ADD CONSTRAINT tbls_msg_history_content_his_pkey PRIMARY KEY (fin_id);
+    ADD CONSTRAINT pk_bls_msg_history_content_his PRIMARY KEY (fin_id);
 
 
 --
@@ -16346,13 +16546,13 @@ ALTER TABLE ONLY tbls_deals
 --
 --
 
-CREATE INDEX tbls_aml_alerts_comment_his_idx ON tbls_aml_alerts_comment_his USING btree (content);
+CREATE INDEX tbls_aml_alerts_comment_his_idx ON tbls_aml_alerts_comment_his USING btree ((md5(content)));
 
 
 --
 --
 
-CREATE INDEX tbls_discrepancy_records_idx ON tbls_discrepancy_records USING btree (discrepancy_contents);
+CREATE INDEX tbls_discrepancy_records_idx ON tbls_discrepancy_records USING btree ((md5(discrepancy_contents)));
 
 
 --
@@ -16364,31 +16564,31 @@ CREATE INDEX tbls_eod_progress_idx ON tbls_eod_progress USING btree (exceptions)
 --
 --
 
-CREATE INDEX tbls_maker_checker_data_idx ON tbls_maker_checker_data USING btree (old_object);
+CREATE INDEX tbls_maker_checker_data_idx ON tbls_maker_checker_data USING btree ((md5(old_object)));
 
 
 --
 --
 
-CREATE INDEX tbls_maker_checker_data_idx001 ON tbls_maker_checker_data USING btree (new_object);
+CREATE INDEX tbls_maker_checker_data_idx001 ON tbls_maker_checker_data USING btree ((md5(new_object)));
 
 
 --
 --
 
-CREATE INDEX tbls_messages_history_his_idx ON tbls_messages_history_his USING btree (msg_contents);
+CREATE INDEX tbls_messages_history_his_idx ON tbls_messages_history_his USING btree ((md5(msg_contents)));
 
 
 --
 --
 
-CREATE INDEX tbls_msg_history_content_his_idx ON tbls_msg_history_content_his USING btree (msg_contents);
+CREATE INDEX tbls_msg_history_content_his_idx ON tbls_msg_history_content_his USING btree ((md5(msg_contents)));
 
 
 --
 --
 
-CREATE INDEX tbls_msg_history_content_idx ON tbls_msg_history_content USING btree (msg_contents);
+CREATE INDEX tbls_msg_history_content_idx ON tbls_msg_history_content USING btree ((md5(msg_contents)));
 
 
 --
@@ -16796,6 +16996,11 @@ CREATE INDEX xbls_mm_ratess001 ON tbls_mm_rates USING btree (timestamp_to_char(m
 --
 --
 
+CREATE INDEX xbls_non_std_ccy_mapping_code ON tbls_non_std_ccy_mapping USING btree (non_std_ccy_code);
+
+--
+--
+
 CREATE INDEX xbls_rates_tolerance002 ON tbls_rates_tolerance USING btree (currency_pair_id);
 
 
@@ -16925,4 +17130,43 @@ CREATE INDEX xbls_vaults_inv_cash002 ON tbls_vaults_inv_cash USING btree (curren
 CREATE INDEX xbls_vaults_inv_cash003 ON tbls_vaults_inv_cash USING btree (timestamp_to_char(bal_date));
 
 
+--------------------------------------------------------
+--  File created - Friday-Feb-08-2019 - MapankaA  
+--------------------------------------------------------
+create or replace function reuters_update()
+  returns trigger as
+$trigger_currencypairs_audit$
+declare
+    currencypair_id varchar(100);
+    operation_type  varchar(100);    
+begin
+if (TG_OP = 'DELETE') then 
+  operation_type = 'delete';
+  currencypair_id = old.pairs_shortname;
+  insert into tbls_currencypairs_audit (currencypair_id,operation_type) values (currencypair_id,operation_type);  
+  return old;
+elsif (TG_OP = 'INSERT') then 
+  operation_type = 'insert';
+  currencypair_id = new.pairs_shortname;
+  insert into tbls_currencypairs_audit (currencypair_id,operation_type) values (currencypair_id,operation_type);  
+  return new;
+elsif (TG_OP = 'UPDATE') then 
+  operation_type = 'update';
+  currencypair_id = new.pairs_shortname;
+  insert into tbls_currencypairs_audit (currencypair_id,operation_type) values (currencypair_id,operation_type);
+  return new;
+end if;
+exception
+    when others then 
+    raise notice 'ERROR : Failed To Update trigger_currencypairs_audit table.';
+	return null;
+end;
+$trigger_currencypairs_audit$
+language 'plpgsql';
 
+drop trigger  if exists  trigger_currencypairs_audit on tbls_currencypairs cascade;
+
+create trigger trigger_currencypairs_audit
+  after insert or update or delete on tbls_currencypairs
+  for each row
+  execute procedure reuters_update();
